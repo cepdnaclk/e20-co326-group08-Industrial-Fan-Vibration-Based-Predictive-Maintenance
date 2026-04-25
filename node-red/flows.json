@@ -1,0 +1,265 @@
+[
+    {
+        "id": "7eae5a0daed4c45a",
+        "type": "tab",
+        "label": "Flow 1",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "f2424743a999e154",
+        "type": "mqtt-broker",
+        "name": "mqtt",
+        "broker": "mqtt",
+        "port": 1883,
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": 4,
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "c3b21c1f45a1767a",
+        "type": "influxdb",
+        "hostname": "127.0.0.1",
+        "port": 8086,
+        "protocol": "http",
+        "database": "database",
+        "name": "influxDB server",
+        "usetls": false,
+        "tls": "",
+        "influxdbVersion": "2.0",
+        "url": "http://influxdb:8086",
+        "timeout": 10,
+        "rejectUnauthorized": true
+    },
+    {
+        "id": "666e68bd65979e45",
+        "type": "mqtt in",
+        "z": "7eae5a0daed4c45a",
+        "name": "mqttFanIn",
+        "topic": "sensors/group08/coolingTower/data/fan01",
+        "qos": "2",
+        "datatype": "json",
+        "broker": "f2424743a999e154",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 140,
+        "y": 80,
+        "wires": [
+            [
+                "6bc7be32c0e2781f"
+            ]
+        ]
+    },
+    {
+        "id": "e73092a3f90e5475",
+        "type": "mqtt out",
+        "z": "7eae5a0daed4c45a",
+        "name": "mqttFanOut",
+        "topic": "sensors/group08/coolingTower/cmd/fan01",
+        "qos": "",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "f2424743a999e154",
+        "x": 510,
+        "y": 160,
+        "wires": []
+    },
+    {
+        "id": "0d2a9ab6affd8658",
+        "type": "mqtt out",
+        "z": "7eae5a0daed4c45a",
+        "name": "mqttMotorOut",
+        "topic": "sensors/group08/coolingTower/cmd/motor01",
+        "qos": "",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "f2424743a999e154",
+        "x": 520,
+        "y": 280,
+        "wires": []
+    },
+    {
+        "id": "e8167e58c6e2a3d2",
+        "type": "http in",
+        "z": "7eae5a0daed4c45a",
+        "name": "httpCmdFan",
+        "url": "/cmd/fan",
+        "method": "get",
+        "upload": false,
+        "skipBodyParsing": false,
+        "swaggerDoc": "",
+        "x": 150,
+        "y": 160,
+        "wires": [
+            [
+                "41e58c98dedba577",
+                "72ab3b4ae90d88aa"
+            ]
+        ]
+    },
+    {
+        "id": "41e58c98dedba577",
+        "type": "change",
+        "z": "7eae5a0daed4c45a",
+        "name": "changeFan",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "SHUTDOWN",
+                "tot": "str"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 330,
+        "y": 160,
+        "wires": [
+            [
+                "e73092a3f90e5475"
+            ]
+        ]
+    },
+    {
+        "id": "5a34891c51d6c280",
+        "type": "http in",
+        "z": "7eae5a0daed4c45a",
+        "name": "httpCmdMotor",
+        "url": "/cmd/motor",
+        "method": "get",
+        "upload": false,
+        "skipBodyParsing": false,
+        "swaggerDoc": "",
+        "x": 150,
+        "y": 280,
+        "wires": [
+            [
+                "e2587a3c893f5fc3",
+                "58812382debb2703"
+            ]
+        ]
+    },
+    {
+        "id": "e2587a3c893f5fc3",
+        "type": "change",
+        "z": "7eae5a0daed4c45a",
+        "name": "changeMotor",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "SHUTDOWN",
+                "tot": "str"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 330,
+        "y": 280,
+        "wires": [
+            [
+                "0d2a9ab6affd8658"
+            ]
+        ]
+    },
+    {
+        "id": "6bc7be32c0e2781f",
+        "type": "function",
+        "z": "7eae5a0daed4c45a",
+        "name": "functionRUL",
+        "func": "let current_energy = msg.payload.mean_energy;\nconst FAILURE_THRESHOLD = 8000; \nlet health_percentage = 100 - ((current_energy / FAILURE_THRESHOLD) * 100);\nif (health_percentage < 0) health_percentage = 0;\nmsg.payload.health = Math.round(health_percentage);\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 310,
+        "y": 80,
+        "wires": [
+            [
+                "6f74d4bf2841c4d3"
+            ]
+        ]
+    },
+    {
+        "id": "6f74d4bf2841c4d3",
+        "type": "influxdb out",
+        "z": "7eae5a0daed4c45a",
+        "influxdb": "c3b21c1f45a1767a",
+        "name": "influxdbOut",
+        "measurement": "fan_data",
+        "precision": "",
+        "retentionPolicy": "",
+        "database": "database",
+        "precisionV18FluxV20": "ms",
+        "retentionPolicyV18Flux": "",
+        "org": "University",
+        "bucket": "cooling_tower",
+        "x": 490,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "72ab3b4ae90d88aa",
+        "type": "http response",
+        "z": "7eae5a0daed4c45a",
+        "name": "httpRes",
+        "statusCode": "",
+        "headers": {},
+        "x": 320,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "58812382debb2703",
+        "type": "http response",
+        "z": "7eae5a0daed4c45a",
+        "name": "httpRes",
+        "statusCode": "",
+        "headers": {},
+        "x": 320,
+        "y": 320,
+        "wires": []
+    }
+]
