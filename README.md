@@ -52,14 +52,14 @@ Our solution strictly adheres to the 4-Layer Industrial IoT architecture:
 | 3.3V | MPU6050 VCC |
 | VIN (5V) | Relay 1 VCC, Relay 2 VCC |
 | GND | All components (shared GND rail) |
-| GPIO21 | MPU6050 SDA |
-| GPIO22 | MPU6050 SCL |
+| GPIO8 | MPU6050 SDA |
+| GPIO9 | MPU6050 SCL |
 | GPIO4 | Green LED (+) — Normal |
 | GPIO5 | Red LED 1 (+) — Blocked |
 | GPIO6 | Red LED 2 (+) — Unbalanced |
 | GPIO7 | Relay 1 IN — Fan |
 | GPIO15 | Relay 2 IN — Pump |
-| GPIO16 | Buzzer (+) |
+| GPIO6 | Buzzer (+) |
 
 #### Relay Switching Side
 
