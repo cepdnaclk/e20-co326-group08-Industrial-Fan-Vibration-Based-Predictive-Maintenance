@@ -142,3 +142,25 @@ Ensure Docker and Docker Compose are installed on your host machine.
 3. Spin up the microservices: 
    ```bash
    docker-compose up -d
+   
+## System Flow Diagram
+
+```mermaid
+graph TD
+    A["ESP32 Sensor Data<br/>(Vibration + Features)"]
+    B["WiFi + MQTT<br/>(QoS 2)"]
+    C["Mosquitto Broker<br/>(MQTT Broker)"]
+    D["Node-RED<br/>(Subscribe + RUL Calc)"]
+    E["InfluxDB<br/>(Time-series Storage)"]
+    F["Grafana<br/>(Visualization + Control)"]
+    G["HTTP/MQTT Commands"]
+    H["ESP32 Actuator<br/>(Fan/Pump Relay)"]
+    
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+    F --> G
+    G --> H
+    H -.->|Feedback| A
