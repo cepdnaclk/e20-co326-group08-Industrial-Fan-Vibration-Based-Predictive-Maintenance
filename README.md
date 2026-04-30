@@ -15,6 +15,7 @@ The data is securely transmitted via MQTT to a local containerized cloud stack. 
 
 ## System Architecture
 Our solution strictly adheres to the 4-Layer Industrial IoT architecture:
+
 <img width="1600" height="1142" alt="image" align="center" src="https://github.com/user-attachments/assets/225b4f5e-57fe-4a58-86f8-120caace0017" />
 
 1. **Perception & Edge Layer (ESP32-S3):** * **Sensor:** MPU6050 Accelerometer for vibration data acquisition.
