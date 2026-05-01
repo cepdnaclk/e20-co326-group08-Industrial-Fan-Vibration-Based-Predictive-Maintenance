@@ -7,7 +7,7 @@
 * D.M.B. Edirisooriya - E/20/093
 
 ## Project Description
-This project implements a 4-layer Cyber-Physical System (CPS) and Digital Twin to monitor the health of an industrial cooling tower fan. By capturing real-time vibration data using an MPU6050 accelerometer, the system performs Edge AI inference (Decision Tree) directly on an ESP32 microcontroller to classify the fan's state as Normal, Blocked, or Unbalanced. 
+This project implements a 4-layer Cyber-Physical System (CPS) and Digital Twin to monitor the health of an industrial cooling tower fan. By capturing real-time vibration data using an MPU6050 accelerometer, the system performs Edge AI inference (Neural Network) directly on an ESP32 microcontroller to classify the fan's state as Normal, Blocked, or Unbalanced. 
 
 <img width="1600" height="900" alt="image" align="center" src="https://github.com/user-attachments/assets/4fd58b7f-a38a-4398-858e-ffee46812b32" />
 
