@@ -69,8 +69,8 @@ const char* topic_cmd_motor = "sensors/group08/coolingTower/cmd/motor01";
 #define PIN_BUZZER      16    // Active buzzer
 
 // ── Relay helpers (hide active-LOW logic) ────────────────
-#define FAN_ON()    digitalWrite(PIN_RELAY_FAN, LOW)
-#define FAN_OFF()   digitalWrite(PIN_RELAY_FAN, HIGH)
+#define FAN_ON()    digitalWrite(PIN_RELAY_FAN, HIGH)
+#define FAN_OFF()   digitalWrite(PIN_RELAY_FAN, LOW)
 #define PUMP_ON()   digitalWrite(PIN_RELAY_PUMP, LOW)
 #define PUMP_OFF()  digitalWrite(PIN_RELAY_PUMP, HIGH)
 
@@ -336,7 +336,7 @@ String buildWebPage() {
   String html = "<!DOCTYPE html><html><head>";
   html += "<meta name='viewport' content='width=device-width, initial-scale=1'>";
   html += "<meta http-equiv='refresh' content='3'>";
-  html += "<title>Fanalyzer</title>";
+  html += "<title>Cooling Tower Fanalyzer</title>";
   html += "<style>";
   html += "body{font-family:Arial,sans-serif;max-width:500px;margin:20px auto;padding:0 15px;background:#1a1a2e;color:#eee}";
   html += "h1{text-align:center;color:#00d2ff;font-size:22px}";
