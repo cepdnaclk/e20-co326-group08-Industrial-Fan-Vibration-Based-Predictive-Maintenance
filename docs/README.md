@@ -4,7 +4,7 @@ permalink: index.html
 
 # Please update this with your repository name and title
 repository-name: e20-co326-Industrial-Fan-Vibration-Based-Predictive-Maintenance
-title:
+title: Industrial Fan Vibration Based Predictive Maintenance
 ---
 
 [comment]: # "This is the standard layout for the project, but you can clean this and use your own template"
