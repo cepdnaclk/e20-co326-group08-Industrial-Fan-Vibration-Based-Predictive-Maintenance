@@ -1,3 +1,41 @@
+// fanalyzer_neural_network.ino
+// COMPLETE FIRMWARE: Fan + Pump + LEDs + Buzzer + Serial + WiFi Dashboard + MQTT
+// BOARD: ESP32-S3 DevKitC-1 (N16R8)
+// RELAY: 2-channel optocoupler-isolated relay module (active-LOW assumed)
+//
+// ═══════════════════════════════════════════════════════════
+//  RELAY MODULE WIRING (2-channel with JD-VCC jumper)
+// ═══════════════════════════════════════════════════════════
+//  REMOVE the JD-VCC/VCC jumper cap before wiring.
+//
+//    Module pin    →  Connects to
+//    ──────────────   ─────────────────────────────
+//    VCC           →  ESP32 3.3V       (opto input side)
+//    JD-VCC        →  +5V supply       (relay coils)
+//    GND (logic)   →  ESP32 GND
+//    GND (coil)    →  5V supply GND    (tie to ESP32 GND if shared supply)
+//    IN1           →  ESP32 GPIO7      (fan)
+//    IN2           →  ESP32 GPIO15     (pump)
+//
+//  Load side: use COM + NO terminals so devices are OFF at boot.
+//
+//  If your module turns out to be ACTIVE-HIGH, change the
+//  RELAY_ACTIVE_LEVEL macro below from LOW to HIGH.
+// ═══════════════════════════════════════════════════════════
+//
+//  COOLING TOWER LOGIC:
+//    Fan blows air across cooling tower
+//    Pump circulates water through the tower
+//    If fan is NOT NORMAL  -> pump auto-shuts down (interlock)
+//    When fan recovers     -> pump auto-restarts (if it was running)
+//    Pump start is DENIED unless fan classification is NORMAL
+// ═══════════════════════════════════════════════════════════
+//
+// REQUIRES: nn_model.h in the same folder
+//
+// SERIAL COMMANDS (115200 baud):
+//   '1' = Fan ON     '0' = Fan OFF
+//   '3' = Pump ON    '2' = Pump OFF
 
 #include <Wire.h>
 #include <MPU6050.h>
@@ -11,7 +49,7 @@
 const char* WIFI_SSID     = "Dasu";
 const char* WIFI_PASSWORD = "Dasuni#2001";
 
-const char* mqtt_server   = "10.61.231.19"; // <--- CHANGE THIS to the IP of the PC running Docker
+const char* mqtt_server   = "10.61.231.19";
 const int   mqtt_port     = 1883;
 
 // ── MQTT Topics ──────────────────────────────────────────
@@ -24,19 +62,24 @@ const char* topic_cmd_motor = "sensors/group08/coolingTower/cmd/motor01";
 #define SAMPLE_RATE_HZ  500
 #define SAMPLE_INTERVAL (1000000 / SAMPLE_RATE_HZ)
 
-// ── Pin definitions (ESP32-S3 N16R8) ─────────────────────
-#define PIN_RELAY_FAN   7     // Relay 1: Fan (active-LOW)
-#define PIN_RELAY_PUMP  15    // Relay 2: Pump (active-LOW)
-#define PIN_LED_NORMAL  4     // Green LED
-#define PIN_LED_BLOCKED 5     // Red LED 1
-#define PIN_LED_UNBAL   6     // Red LED 2
-#define PIN_BUZZER      16    // Active buzzer
+// ── Pin definitions ──────────────────────────────────────
+#define PIN_RELAY_FAN   7     // Relay IN1: Fan
+#define PIN_RELAY_PUMP  15    // Relay IN2: Pump
+#define PIN_LED_NORMAL  4
+#define PIN_LED_BLOCKED 5
+#define PIN_LED_UNBAL   6
+#define PIN_BUZZER      16
 
-// ── Relay helpers (hide active-LOW logic) ────────────────
-#define FAN_ON()    digitalWrite(PIN_RELAY_FAN, HIGH)
-#define FAN_OFF()   digitalWrite(PIN_RELAY_FAN, LOW)
-#define PUMP_ON()   digitalWrite(PIN_RELAY_PUMP, LOW)
-#define PUMP_OFF()  digitalWrite(PIN_RELAY_PUMP, HIGH)
+// ── Relay logic level ────────────────────────────────────
+// Default: ACTIVE-LOW. If your module is active-HIGH,
+// change LOW to HIGH and HIGH to LOW in the next two lines.
+#define RELAY_ACTIVE_LEVEL    LOW
+#define RELAY_INACTIVE_LEVEL  HIGH
+
+#define FAN_ON()    digitalWrite(PIN_RELAY_FAN,  RELAY_ACTIVE_LEVEL)
+#define FAN_OFF()   digitalWrite(PIN_RELAY_FAN,  RELAY_INACTIVE_LEVEL)
+#define PUMP_ON()   digitalWrite(PIN_RELAY_PUMP, RELAY_ACTIVE_LEVEL)
+#define PUMP_OFF()  digitalWrite(PIN_RELAY_PUMP, RELAY_INACTIVE_LEVEL)
 
 // ── Objects ──────────────────────────────────────────────
 MPU6050 mpu;
@@ -50,15 +93,30 @@ WebServer     server(80);
 
 const char* CLASS_LABELS[] = {"NORMAL", "BLOCKED", "UNBALANCED", "EMPTY", "OFF"};
 
-// ── State tracking ───────────────────────────────────────
+// ── State ────────────────────────────────────────────────
 bool fanRunning      = false;
 bool pumpRunning     = false;
 bool pumpInterlocked = false;
 bool pumpWasRunning  = false;
 int  lastPrediction  = -1;
-int  currentPrediction = 3;  // Start as EMPTY/OFF-ish
+int  currentPrediction = 3;
 
 struct Features { float dom_freq, max_amp, mean_energy; };
+
+// ══════════════════════════════════════════════════════════
+//  BOOT-SAFE RELAY INIT
+//  Drive pins to inactive level BEFORE switching to OUTPUT.
+//  Prevents glitch where a floating pin briefly energizes
+//  the relay coil at power-on.
+// ══════════════════════════════════════════════════════════
+void initRelaysSafe() {
+  digitalWrite(PIN_RELAY_FAN,  RELAY_INACTIVE_LEVEL);
+  digitalWrite(PIN_RELAY_PUMP, RELAY_INACTIVE_LEVEL);
+  pinMode(PIN_RELAY_FAN,  OUTPUT);
+  pinMode(PIN_RELAY_PUMP, OUTPUT);
+  FAN_OFF();
+  PUMP_OFF();
+}
 
 // ══════════════════════════════════════════════════════════
 //  FEATURE EXTRACTION
@@ -102,7 +160,7 @@ void scaleFeatures(float* input, float* output) {
 }
 
 // ══════════════════════════════════════════════════════════
-//  SOFTMAX (with max-subtraction for numerical stability)
+//  SOFTMAX
 // ══════════════════════════════════════════════════════════
 void softmax(float* x, int n) {
   float maxVal = x[0];
@@ -113,14 +171,13 @@ void softmax(float* x, int n) {
 }
 
 // ══════════════════════════════════════════════════════════
-//  NEURAL NETWORK FORWARD PASS (3->16->8->4)
+//  NEURAL NETWORK FORWARD PASS
 // ══════════════════════════════════════════════════════════
 int nn_predict(float dom_freq, float max_amp, float mean_energy) {
   float raw[3] = {dom_freq, max_amp, mean_energy};
   float inp[3];
   scaleFeatures(raw, inp);
 
-  // Layer 1: 3 -> 16, ReLU
   float h1[NN_LAYER_1_SIZE];
   for (int j = 0; j < NN_LAYER_1_SIZE; j++) {
     float s = b1[j];
@@ -128,7 +185,6 @@ int nn_predict(float dom_freq, float max_amp, float mean_energy) {
     h1[j] = relu(s);
   }
 
-  // Layer 2: 16 -> 8, ReLU
   float h2[NN_LAYER_2_SIZE];
   for (int j = 0; j < NN_LAYER_2_SIZE; j++) {
     float s = b2[j];
@@ -136,7 +192,6 @@ int nn_predict(float dom_freq, float max_amp, float mean_energy) {
     h2[j] = relu(s);
   }
 
-  // Output: 8 -> 4, Softmax
   float out[NN_LAYER_3_SIZE];
   for (int j = 0; j < NN_LAYER_3_SIZE; j++) {
     float s = b3[j];
@@ -162,12 +217,12 @@ void updateLEDs(int prediction) {
     case 0: digitalWrite(PIN_LED_NORMAL,  HIGH); break;
     case 1: digitalWrite(PIN_LED_BLOCKED, HIGH); break;
     case 2: digitalWrite(PIN_LED_UNBAL,   HIGH); break;
-    case 4: break;  // All off when fan is off
+    case 4: break;
   }
 }
 
 // ══════════════════════════════════════════════════════════
-//  BUZZER — double beep for fault states
+//  BUZZER
 // ══════════════════════════════════════════════════════════
 void updateBuzzer(int prediction) {
   if (prediction == 1 || prediction == 2) {
@@ -182,13 +237,12 @@ void updateBuzzer(int prediction) {
 
 // ══════════════════════════════════════════════════════════
 //  COOLING TOWER INTERLOCK
-//  Only NORMAL (class 0) is considered safe.
 // ══════════════════════════════════════════════════════════
 void updateInterlock(int prediction) {
   bool isSafe = (prediction == 0);
 
   if (!isSafe && !pumpInterlocked) {
-    pumpWasRunning = pumpRunning; // Remember if it was running before the fault
+    pumpWasRunning = pumpRunning;
     if (pumpRunning) {
       PUMP_OFF();
       pumpRunning = false;
@@ -208,7 +262,7 @@ void updateInterlock(int prediction) {
 }
 
 // ══════════════════════════════════════════════════════════
-//  FAN & PUMP CONTROL (used by serial + WiFi + MQTT)
+//  FAN & PUMP CONTROL
 // ══════════════════════════════════════════════════════════
 void setFan(bool on) {
   if (on) { FAN_ON();  fanRunning = true;  Serial.println("\n*** FAN ON ***"); }
@@ -217,7 +271,6 @@ void setFan(bool on) {
 
 void setPump(bool on) {
   if (on) {
-    // STRICT RULE: Pump can ONLY turn on if Fan is NORMAL (Class 0)
     if (currentPrediction != 0) {
       Serial.println("\n*** PUMP START DENIED: Fan is not NORMAL! Fix fan first. ***");
       return;
@@ -226,13 +279,12 @@ void setPump(bool on) {
   }
   else {
     PUMP_OFF(); pumpRunning = false; Serial.println("\n*** PUMP OFF ***");
-    pumpWasRunning = false; // Clear auto-restart memory if manually stopped
+    pumpWasRunning = false;
   }
 }
 
 // ══════════════════════════════════════════════════════════
-//  SERIAL COMMANDS: '1'=fan on, '0'=fan off,
-//                   '3'=pump on, '2'=pump off
+//  SERIAL COMMANDS
 // ══════════════════════════════════════════════════════════
 void handleSerialCommands() {
   while (Serial.available()) {
@@ -248,7 +300,7 @@ void handleSerialCommands() {
 }
 
 // ══════════════════════════════════════════════════════════
-//  MQTT CALLBACK (Incoming Commands)
+//  MQTT CALLBACK
 // ══════════════════════════════════════════════════════════
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
   String message = "";
@@ -257,17 +309,15 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   }
   message.trim();
 
-  Serial.print("MQTT Command Received on [");
+  Serial.print("MQTT [");
   Serial.print(topic);
   Serial.print("]: ");
   Serial.println(message);
 
-  // Handle Fan Commands
   if (String(topic) == topic_cmd_fan) {
     if (message == "SHUTDOWN" || message == "0" || message == "OFF") setFan(false);
     else if (message == "ON" || message == "1") setFan(true);
   }
-  // Handle Motor (Pump) Commands
   else if (String(topic) == topic_cmd_motor) {
     if (message == "SHUTDOWN" || message == "2" || message == "OFF") setPump(false);
     else if (message == "ON" || message == "3" || message == "4") setPump(true);
@@ -275,7 +325,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 }
 
 // ══════════════════════════════════════════════════════════
-//  WiFi WEB SERVER — Dashboard
+//  WEB DASHBOARD
 // ══════════════════════════════════════════════════════════
 String buildWebPage() {
   String fanState       = fanRunning ? "ON" : "OFF";
@@ -300,7 +350,7 @@ String buildWebPage() {
   String html = "<!DOCTYPE html><html><head>";
   html += "<meta name='viewport' content='width=device-width, initial-scale=1'>";
   html += "<meta http-equiv='refresh' content='3'>";
-  html += "<title>Cooling Tower Fanalyzer</title>";
+  html += "<title>Fanalyzer</title>";
   html += "<style>";
   html += "body{font-family:Arial,sans-serif;max-width:500px;margin:20px auto;padding:0 15px;background:#1a1a2e;color:#eee}";
   html += "h1{text-align:center;color:#00d2ff;font-size:22px}";
@@ -310,21 +360,18 @@ String buildWebPage() {
   html += ".label{color:#aaa;font-size:14px}";
   html += ".value{font-weight:bold;font-size:16px;padding:4px 12px;border-radius:6px;color:#fff}";
   html += ".btn-row{display:flex;gap:10px;margin:8px 0}";
-  html += ".btn{flex:1;padding:14px;border:none;border-radius:8px;font-size:16px;font-weight:bold;cursor:pointer;color:#fff;text-decoration:none;text-align:center;display:block}";
+  html += ".btn{flex:1;padding:14px;border:none;border-radius:8px;font-size:16px;font-weight:bold;color:#fff;text-decoration:none;text-align:center;display:block}";
   html += ".btn-on{background:#27ae60}.btn-off{background:#e74c3c}";
-  html += ".btn:active{opacity:0.7}";
   html += ".warn{background:#e74c3c22;border:1px solid #e74c3c;border-radius:8px;padding:10px;margin:8px 0;text-align:center;color:#e74c3c;font-size:14px}";
   html += "</style></head><body>";
 
   html += "<h1>Fanalyzer</h1>";
   html += "<p style='text-align:center;color:#666;font-size:12px'>Cooling Tower Control — ESP32-S3 + MQTT</p>";
 
-  // Fan Health
   html += "<h2>Fan health</h2><div class='card'>";
   html += "<div class='status'><span class='label'>Classification</span>";
   html += "<span class='value' style='background:" + stateColor + "'>" + fanClass + "</span></div></div>";
 
-  // Fan Control
   html += "<h2>Fan control</h2><div class='card'>";
   html += "<div class='status'><span class='label'>Fan</span>";
   html += "<span class='value' style='background:" + fanColor + "'>" + fanState + "</span></div>";
@@ -332,7 +379,6 @@ String buildWebPage() {
   html += "<a class='btn btn-on' href='/fan/on'>Fan ON</a>";
   html += "<a class='btn btn-off' href='/fan/off'>Fan OFF</a></div></div>";
 
-  // Pump Control
   html += "<h2>Pump control</h2><div class='card'>";
   html += "<div class='status'><span class='label'>Pump</span>";
   html += "<span class='value' style='background:" + pumpColor + "'>" + pumpState + "</span></div>";
@@ -398,17 +444,10 @@ void setupWiFi() {
     Serial.println("  Web server started!");
   } else {
     Serial.println(" FAILED!");
-    Serial.println("  Using Serial / MQTT control only.");
-    Serial.println("  Check WIFI_SSID and WIFI_PASSWORD.");
   }
 }
 
-// ══════════════════════════════════════════════════════════
-//  MQTT RECONNECT
-// ══════════════════════════════════════════════════════════
 void reconnectMQTT() {
-  // Try once per loop iteration — do NOT block forever, otherwise
-  // the web server stops responding when the broker is offline.
   if (mqttClient.connected()) return;
 
   Serial.print("Attempting MQTT connection...");
@@ -423,9 +462,6 @@ void reconnectMQTT() {
   }
 }
 
-// ══════════════════════════════════════════════════════════
-//  PRINT RESULT
-// ══════════════════════════════════════════════════════════
 void printResult(Features f, int pred) {
   Serial.println("\n================================");
   Serial.println("  Fanalyzer — Cooling Tower");
@@ -458,9 +494,20 @@ void printResult(Features f, int pred) {
 // ══════════════════════════════════════════════════════════
 void setup() {
   Serial.begin(115200);
-  delay(1000);  // Wait for S3 native USB
+  delay(1000);
 
-  // I2C + Sensor
+  // Boot-safe relay init FIRST
+  initRelaysSafe();
+
+  pinMode(PIN_LED_NORMAL,  OUTPUT);
+  pinMode(PIN_LED_BLOCKED, OUTPUT);
+  pinMode(PIN_LED_UNBAL,   OUTPUT);
+  pinMode(PIN_BUZZER,      OUTPUT);
+  digitalWrite(PIN_LED_NORMAL,  LOW);
+  digitalWrite(PIN_LED_BLOCKED, LOW);
+  digitalWrite(PIN_LED_UNBAL,   LOW);
+  digitalWrite(PIN_BUZZER,      LOW);
+
   Wire.begin(8, 9);
   delay(100);
   mpu.initialize();
@@ -469,41 +516,16 @@ void setup() {
     while (1);
   }
 
-  // Output pins
-  pinMode(PIN_RELAY_FAN,   OUTPUT);
-  pinMode(PIN_RELAY_PUMP,  OUTPUT);
-  pinMode(PIN_LED_NORMAL,  OUTPUT);
-  pinMode(PIN_LED_BLOCKED, OUTPUT);
-  pinMode(PIN_LED_UNBAL,   OUTPUT);
-  pinMode(PIN_BUZZER,      OUTPUT);
-
-  // Initial state: everything OFF
-  FAN_OFF();
-  PUMP_OFF();
-  digitalWrite(PIN_LED_NORMAL,  LOW);
-  digitalWrite(PIN_LED_BLOCKED, LOW);
-  digitalWrite(PIN_LED_UNBAL,   LOW);
-  digitalWrite(PIN_BUZZER,      LOW);
-
-  // Startup banner
   Serial.println("\n========================================");
   Serial.println("  Fanalyzer — Cooling Tower System");
   Serial.println("  Board: ESP32-S3 DevKitC-1 N16R8");
-  Serial.println("========================================");
-  Serial.println("  Classes: NORMAL / BLOCKED / UNBALANCED / EMPTY / OFF");
-  Serial.println("  LEDs: Green=Normal Red1=Blocked Red2=Unbalanced");
-  Serial.println("  Buzzer: Double-beep on fault states");
-  Serial.println("----------------------------------------");
-  Serial.println("  SERIAL: '1'=Fan ON  '0'=Fan OFF");
-  Serial.println("          '3'=Pump ON '2'=Pump OFF");
-  Serial.println("  INTERLOCK: Non-NORMAL  -> pump stops");
-  Serial.println("             NORMAL recovery -> pump restarts");
+  Serial.println("  Relay: 2-channel optocoupler module");
+  Serial.print  ("  Logic: ");
+  Serial.println(RELAY_ACTIVE_LEVEL == LOW ? "ACTIVE-LOW" : "ACTIVE-HIGH");
   Serial.println("========================================");
 
-  // WiFi + Web Server
   setupWiFi();
 
-  // MQTT
   mqttClient.setServer(mqtt_server, mqtt_port);
   mqttClient.setCallback(mqttCallback);
 
@@ -514,26 +536,14 @@ void setup() {
 //  MAIN LOOP
 // ══════════════════════════════════════════════════════════
 void loop() {
-  // Keep WiFi up
-  if (WiFi.status() != WL_CONNECTED) {
-    setupWiFi();
-  }
+  if (WiFi.status() != WL_CONNECTED) setupWiFi();
+  if (WiFi.status() == WL_CONNECTED) server.handleClient();
 
-  // Handle web dashboard requests
-  if (WiFi.status() == WL_CONNECTED) {
-    server.handleClient();
-  }
-
-  // Keep MQTT up (non-blocking retry)
-  if (WiFi.status() == WL_CONNECTED && !mqttClient.connected()) {
-    reconnectMQTT();
-  }
+  if (WiFi.status() == WL_CONNECTED && !mqttClient.connected()) reconnectMQTT();
   mqttClient.loop();
 
-  // Serial control
   handleSerialCommands();
 
-  // Sensing + classification
   Features f = extractFeatures();
   int pred = nn_predict(f.dom_freq, f.max_amp, f.mean_energy);
   currentPrediction = pred;
@@ -552,7 +562,6 @@ void loop() {
     lastPrediction = pred;
   }
 
-  // Publish telemetry via MQTT
   if (mqttClient.connected()) {
     String json = "{";
     json += "\"fan_state\":\"" + String(CLASS_LABELS[pred]) + "\",";

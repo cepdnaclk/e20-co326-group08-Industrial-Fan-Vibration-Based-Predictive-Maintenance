@@ -1,50 +1,50 @@
 #include <Wire.h>
 #include <MPU6050.h>
 
-MPU6050 mpu;
-
 #define N_SAMPLES 128
-#define SAMPLE_INTERVAL_US 2000  // 2ms = 500Hz sampling rate
+#define SAMPLE_INTERVAL 2000  // microseconds = 500Hz
 
-float raw_samples[N_SAMPLES];
-
-void collectSamples() {
-  for (int i = 0; i < N_SAMPLES; i++) {
-    int16_t ax, ay, az;
-    mpu.getAcceleration(&ax, &ay, &az);
-
-    // Compute vibration magnitude (removes gravity effect direction)
-    float mag = sqrt((float)ax * ax + (float)ay * ay + (float)az * az);
-    raw_samples[i] = mag;
-
-    delayMicroseconds(SAMPLE_INTERVAL_US);
-  }
-}
+MPU6050 mpu;
 
 void setup() {
   Serial.begin(115200);
-  Wire.begin(21, 22);
+  
+  // CRITICAL: Wait for S3 Native USB Serial to be ready
+  while (!Serial) {
+    delay(10);
+  }
+
+  // Update to your working S3 pins
+  Wire.begin(8, 9); 
   delay(100);
+
   mpu.initialize();
 
+  // If connection fails, Python will see "MPU6050 ERROR"
   if (!mpu.testConnection()) {
-    Serial.println("ERROR: MPU6050 not found!");
+    Serial.println("MPU6050 ERROR");
     while (1);
   }
 
+  // Python looks for this string to confirm connection
   Serial.println("READY");
 }
 
 void loop() {
-  if (Serial.available()) {
+  if (Serial.available() > 0) {
     char cmd = Serial.read();
 
     if (cmd == 'C') {
-      collectSamples();
-
-      // Send all samples to PC
+      // Collect one window of 128 samples
       for (int i = 0; i < N_SAMPLES; i++) {
-        Serial.println(raw_samples[i], 4);
+        int16_t ax, ay, az;
+        mpu.getAcceleration(&ax, &ay, &az);
+        
+        // Use pow() or (float) casting for magnitude
+        float mag = sqrt(pow(ax, 2) + pow(ay, 2) + pow(az, 2));
+        
+        Serial.println(mag, 4);
+        delayMicroseconds(SAMPLE_INTERVAL);
       }
       Serial.println("END");
     }
