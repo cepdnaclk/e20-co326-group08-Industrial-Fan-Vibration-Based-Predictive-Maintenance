@@ -1,30 +1,31 @@
 {
     "team": [
         {
-            "name": "Team Member Name 1",
-            "email": "email@eng.pdn.ac.lk",
-            "eNumber": "E/yy/xxx"
+            "name": "M.L. De Croos Rubin",
+            "email": "e20054@eng.pdn.ac.lk",
+            "eNumber": "E/20/054"
         },
         {
-            "name": "Team Member Name 2",
-            "email": "email@eng.pdn.ac.lk",
-            "eNumber": "E/yy/xxx"
+            "name": "A.H.D. Kawya",
+            "email": "e20197@eng.pdn.ac.lk",
+            "eNumber": "E/20/197"
         },
         {
-            "name": "Team Member Name 3",
-            "email": "email@eng.pdn.ac.lk",
-            "eNumber": "E/yy/xxx"
+            "name": "K.W.I.T. Kumarasinghe",
+            "email": "e20211@eng.pdn.ac.lk",
+            "eNumber": "E/20/211"
+        },
+        {
+            "name": "D.M.B. Edirisooriya",
+            "email": "e20093@eng.pdn.ac.lk",
+            "eNumber": "E/20/093"
         }
     ],
     "supervisors": [
         {
-            "name": "Dr. Supervisor 1",
-            "email": "email@eng.pdn.ac.lk"
-        },
-        {
-            "name": "Supervisor 2",
-            "email": "email@eng.pdn.ac.lk"
+            "name": "Prof. Kamalanath Samarakoon",
+            "email": "kamalanath@eng.pdn.ac.lk"
         }
     ],
-    "tags": []
+    "tags": [Cyber Physical System]
 }
