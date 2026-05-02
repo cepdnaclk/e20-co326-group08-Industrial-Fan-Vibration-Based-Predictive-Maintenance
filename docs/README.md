@@ -3,13 +3,13 @@ layout: home
 permalink: index.html
 
 # Please update this with your repository name and title
-repository-name: eYY-XXX-project-template
+repository-name: e20-co326-Industrial-Fan-Vibration-Based-Predictive-Maintenance
 title:
 ---
 
 [comment]: # "This is the standard layout for the project, but you can clean this and use your own template"
 
-# Project Title
+# ndustrial-Fan-Vibration-Based-Predictive-Maintenance
 
 ---
 
@@ -20,9 +20,13 @@ This is a sample image, to show how to add images to your page. To learn more op
  -->
 
 ## Team
--  eNumber, Name, [email](mailto:name@email.com)
--  eNumber, Name, [email](mailto:name@email.com)
--  eNumber, Name, [email](mailto:name@email.com)
+-  E/20/054, M.L. De Croos Rubin, e20054@eng.pdn.ac.lk
+-  E/20/197, A.H.D. Kawya, e20197@eng.pdn.ac.lk
+-  E/20/211, K.W.I.T. Kumarasinghe, e20211@eng.pdn.ac.lk
+-  E/20/093, D.M.B. Edirisooriya, e20093@eng.pdn.ac.lk
+
+## Supervisor
+-  Prof. Kamalanath Samarakoon, kamalanath@eng.pdn.ac.lk
 
 ## Table of Contents
 1. [Introduction](#introduction)
