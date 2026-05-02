@@ -9,7 +9,7 @@ title: Industrial Fan Vibration Based Predictive Maintenance
 
 [comment]: # "This is the standard layout for the project, but you can clean this and use your own template"
 
-# ndustrial-Fan-Vibration-Based-Predictive-Maintenance
+# Industrial-Fan-Vibration-Based-Predictive-Maintenance
 
 ---
 
