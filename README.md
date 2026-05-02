@@ -13,6 +13,8 @@ This project implements a 4-layer Cyber-Physical System (CPS) and Digital Twin t
 
 The data is securely transmitted via MQTT to a local containerized cloud stack. The system not only visualizes real-time telemetry but also calculates the Remaining Useful Life (RUL) of the fan based on accumulated mechanical stress (mean vibration energy) and allows for bidirectional control to remotely shut down the asset in critical conditions.
 
+Project Report: `https://github.com/cepdnaclk/e20-co326-group08-Industrial-Fan-Vibration-Based-Predictive-Maintenance/blob/main/project-report/Group08_Project_Report.pdf`
+
 ## System Architecture
 Our solution strictly adheres to the 4-Layer Industrial IoT architecture:
 
